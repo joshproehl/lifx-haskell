@@ -24,6 +24,7 @@ module Network.Lifx.Core.Datatypes where
 
 import Data.Int
 import qualified Data.ByteString       as B
+import Data.ByteString.Lazy (fromStrict)
 import qualified Data.ByteString.Char8 as BC
 import Data.Binary
 import Data.Binary.Put
@@ -34,35 +35,15 @@ import GHC.Generics (Generic)
 {-
 A packet has a number of number of fields that exist in every packet, and
 a payload which varies per packet type.
-Per https://github.com/magicmonkey/lifxjs/blob/master/Protocol.md, the
-packet structure is:
-packet
-{
-  uint16 size;              // LE
-  uint16 protocol;
-  uint32 reserved1;         // Always 0x0000
-  byte   target_mac_address[6];
-  uint16 reserved2;         // Always 0x00
-  byte   site[6];           // MAC address of gateway PAN controller bulb
-  uint16 reserved3;         // Always 0x00
-  uint64 timestamp;
-  uint16 packet_type;       // LE
-  uint16 reserved4;         // Always 0x0000
-
-  varies payload;           // Documented below per packet type
-}
+This is based on: https://github.com/magicmonkey/lifxjs/blob/master/Protocol.md, the
 -}
 data Packet = Packet {
        size               :: Word16
      , protocol           :: Word16
-     --, reserved1          :: Int32
-     , target_mac_address :: B.ByteString
-     --, reserved2          :: Int16
-     , site               :: B.ByteString
-     --, reserved3          :: Int16
+     , target_mac_address :: [Word8]
+     , site               :: [Word8]
      , timestamp          :: Word64
      , packet_type        :: Word16
-     --, reserved4          :: Int16
      , payload            :: Payload
 } deriving (Show)
 
@@ -72,22 +53,22 @@ instance Binary Packet where
   put (Packet s p tma st ts pt pl) = do
       putWord16le s
       putWord16le p
-      putWord32be 0
+      putWord32be 0  -- Reserved1
       --BEGIN 6-byte block which should be mac_addr
-      --put         tma
-      putWord32be 0
-      putWord16be 0
+      putByteString (B.pack tma)
+      --putWord32be 0
+      --putWord16be 0
       -- END 6-byte
-      putWord16be 0
+      putWord16be 0  -- Reserved2
       -- BEGIN 6-byte block which should be "site"
-      --put         st
-      putWord32be 0
-      putWord16be 0
+      putByteString (B.pack st)
+      --putWord32be 0
+      --putWord16be 0
       --END 6-byte
-      putWord16be 0
+      putWord16be 0  -- Reserved3
       putWord64be ts
       putWord16le pt
-      putWord16be 0
+      putWord16be 0  -- Reserved4
       put pl
 
   get = do
@@ -115,7 +96,7 @@ instance Binary Packet where
 
           pl <- get
 
-          return (Packet s p tma st ts pt pl)
+          return (Packet s p (B.unpack tma) (B.unpack st) ts pt pl)
 
 
 
@@ -125,11 +106,25 @@ Each packet has a specific payload type, which can be identified by it's
 packet_type value.
 -}
 data Payload = None
+             | SetPowerState Integer
+             | SetLightColor Word16 Word16 Word16 Word16 Word32
       deriving (Show)
 
 instance Binary Payload where
   put None = do
       return ()
+
+  put (SetPowerState i) = do
+    putWord16be (fromInteger (i::Integer) ::Word16)
+
+  put (SetLightColor h sat br k ft) = do
+    putWord8 0
+    putWord16le h
+    putWord16le sat
+    putWord16le br
+    putWord16le k
+    putWord32le ft
+
 
   get = do
       return None
@@ -144,3 +139,7 @@ instance Binary Payload where
              trades <- getTrades
              return (trade:trades)
 -}
+
+
+getSite :: Packet -> [Word8]
+getSite (Packet s p tma st ts pt pl) = st
