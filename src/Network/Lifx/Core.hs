@@ -1,3 +1,5 @@
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+
 {-
 Network.Lifx - A Library to interact with Lifx light bulbs. (lifx.co)
 Copyright (C) 2014  Josh Proehl <josh@daedalusdreams.com>
@@ -21,5 +23,26 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 -}
 
 
+
 module Network.Lifx.Core (
+  Lifx
   ) where
+
+import           Network.Lifx.Core.Datatypes
+
+import           Control.Monad.Reader (ReaderT(..), ask)
+import           Control.Monad.State (StateT, MonadIO(..))
+import           System.IO (Handle, hPutStrLn)
+
+
+newtype Lifx a = Lifx { runLifx :: StateT LifxState IO a }
+                 deriving (Functor, Monad, MonadIO)
+
+-- | The inner state. Contains the connection to the master bulb.
+data LifxState = LifxState { controllerH :: Maybe Handle }
+
+
+
+-- | Find the master bulb and get the connection to it set up.
+-- openLifx :: Lifx ()
+-- openLifx :: Lifx $ do

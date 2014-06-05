@@ -16,56 +16,34 @@ GNU Lesser General Public License for more details.
 You should have received a copy of the GNU Lesser General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ***************************************************************************
-
-
--}
-
-module Network.Lifx (
-
-{-
-  --  Basic data types
-  MonadMPD, MPD, MPDError(..), ACKType(..), Response,
-  Host, Port, Password,
-
-  -- * Connections
-  withMPD, withMPD_, withMPDEx,
-  module Network.MPD.Commands,
-#ifdef TEST
-  getConnectionSettings, getEnvDefault
-#endif
 -}
 
 
-  ) where
+
+module Lifx where
+--import Network
+import Network.Socket --    (Socket, close)
+import Lifx.Core
+--import System.IO
+--import Control.Exception
+--import System.Posix
+--import Control.Concurrent
 
 
-import           Prelude
--- import qualified Control.Exception as Ex
-import           Network.Socket
-import qualified Network.Socket.ByteString as BS
-import           Network.Lifx.Core
+-- Set up some basic variables.
 
--- TEMP:
-import Network.Lifx.Core.Datatypes
-import Data.Binary
-import qualified Data.ByteString       as B
-import qualified Data.ByteString.Char8 as BC (pack)
-import qualified Data.ByteString.Lazy  as BL (copy, toStrict, fromStrict)
+--port = PortNumber 56700
+--peerPort = PortNumber 56750
 
-
-
+--main :: IO ()
 main = withSocketsDo $ do
-        -- Set up the "request master bulb" packet
-        let p = Packet 36 13312 (BC.pack "000000") (BC.pack "000000") 0 2 None
-
         -- Set up a UDP socket to listen for results
         -- (Listens on all interfaces.)
         s <- socket AF_INET Datagram defaultProtocol
         bindAddr <- inet_addr "0.0.0.0"
         setSocketOption s Broadcast 1
         bindSocket s (SockAddrInet 56700 bindAddr)
-        connect s (SockAddrInet 56700 (-1))
-        BS.sendAll s (BL.toStrict (encode p))
+        sendTo s "Test" (SockAddrInet 56700 (-1))
         sClose s
 
         s <- socket AF_INET Datagram defaultProtocol
@@ -75,13 +53,9 @@ main = withSocketsDo $ do
         putStrLn "Waiting for master bulb response..."
 
         -- Get some message, max length 1000
-        -- (msg, len, from) <- recvFrom s 1000
-        (msg, addr) <- BS.recvFrom s 1024
-        let r = (decode (BL.fromStrict msg)) :: Packet
+        (msg, len, from) <- recvFrom s 1000
 
-        putStrLn $ "Got message from "++(show addr)
-        putStrLn (show r)
-        -- TODO: Loop until you get a packet_type of 3, or 
-        --       time limit expires. THAT'S our target.
+        putStrLn $ "Got message from "++(show from)
+        putStrLn (show msg)
 
         sClose s

@@ -1,3 +1,5 @@
+{- LANGUAGE DeriveGeneric #-}
+
 {-
 Network.Lifx - A Library to interact with Lifx light bulbs. (lifx.co)
 Copyright (C) 2014  Josh Proehl <josh@daedalusdreams.com>
@@ -18,6 +20,15 @@ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 ***************************************************************************
 -}
 
+module Network.Lifx.Core.Datatypes where
+
+import Data.Int
+import qualified Data.ByteString       as B
+import qualified Data.ByteString.Char8 as BC
+import Data.Binary
+import Data.Binary.Put
+import Data.Binary.Get
+import GHC.Generics (Generic)
 
 
 {-
@@ -42,18 +53,70 @@ packet
 }
 -}
 data Packet = Packet {
-       size               :: Int16 -- TODO: All data types here need to be checked
-     , protocol           :: Int16
-     , reserved1          :: Int32
-     , target_mac_address :: 
-     , reserved2          :: Int16
-     , site               :: 
-     , reserved3          :: Int16
-     , timestamp          :: Int64
-     , packet_type        :: Int16
-     , reserved4          :: Int16
+       size               :: Word16
+     , protocol           :: Word16
+     --, reserved1          :: Int32
+     , target_mac_address :: B.ByteString
+     --, reserved2          :: Int16
+     , site               :: B.ByteString
+     --, reserved3          :: Int16
+     , timestamp          :: Word64
+     , packet_type        :: Word16
+     --, reserved4          :: Int16
      , payload            :: Payload
-} -- deriving...
+} deriving (Show)
+
+
+-- Make it possible to encode/decode Packets from binary format.
+instance Binary Packet where
+  put (Packet s p tma st ts pt pl) = do
+      putWord16le s
+      putWord16le p
+      putWord32be 0
+      --BEGIN 6-byte block which should be mac_addr
+      --put         tma
+      putWord32be 0
+      putWord16be 0
+      -- END 6-byte
+      putWord16be 0
+      -- BEGIN 6-byte block which should be "site"
+      --put         st
+      putWord32be 0
+      putWord16be 0
+      --END 6-byte
+      putWord16be 0
+      putWord64be ts
+      putWord16le pt
+      putWord16be 0
+      put pl
+
+  get = do
+          s <- getWord16le
+          p <- getWord16le
+          getWord32be
+
+          -- 6-byte block which should be mac_addr
+          --getWord32be
+          --getWord16be
+          tma <- getByteString 6
+
+          getWord16be
+
+          -- 6-byte block which should be "site"
+          --getWord32be
+          --getWord16be
+          st <- getByteString 6
+
+          getWord16be
+          ts <- getWord64be
+          pt <- getWord16le
+
+          getWord16be
+
+          pl <- get
+
+          return (Packet s p tma st ts pt pl)
+
 
 
 
@@ -61,4 +124,23 @@ data Packet = Packet {
 Each packet has a specific payload type, which can be identified by it's
 packet_type value.
 -}
-data Payload = 
+data Payload = None
+      deriving (Show)
+
+instance Binary Payload where
+  put None = do
+      return ()
+
+  get = do
+      return None
+
+{-
+ getTrades :: Get [Trade]
+ getTrades = do
+   empty <- isEmpty
+   if empty
+     then return []
+     else do trade <- getTrade
+             trades <- getTrades
+             return (trade:trades)
+-}
